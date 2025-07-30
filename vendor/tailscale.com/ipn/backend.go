@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tailscale.com/drive"
+	"tailscale.com/health"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/empty"
@@ -57,19 +58,31 @@ type EngineStatus struct {
 // to subscribe to.
 type NotifyWatchOpt uint64
 
+// NotifyWatchOpt values.
+//
+// These aren't declared using Go's iota because they're not purely internal to
+// the process and iota should not be used for values that are serialized to
+// disk or network. In this case, these values come over the network via the
+// LocalAPI, a mostly stable API.
 const (
 	// NotifyWatchEngineUpdates, if set, causes Engine updates to be sent to the
 	// client either regularly or when they change, without having to ask for
 	// each one via Engine.RequestStatus.
-	NotifyWatchEngineUpdates NotifyWatchOpt = 1 << iota
+	NotifyWatchEngineUpdates NotifyWatchOpt = 1 << 0
 
-	NotifyInitialState  // if set, the first Notify message (sent immediately) will contain the current State + BrowseToURL + SessionID
-	NotifyInitialPrefs  // if set, the first Notify message (sent immediately) will contain the current Prefs
-	NotifyInitialNetMap // if set, the first Notify message (sent immediately) will contain the current NetMap
+	NotifyInitialState  NotifyWatchOpt = 1 << 1 // if set, the first Notify message (sent immediately) will contain the current State + BrowseToURL + SessionID
+	NotifyInitialPrefs  NotifyWatchOpt = 1 << 2 // if set, the first Notify message (sent immediately) will contain the current Prefs
+	NotifyInitialNetMap NotifyWatchOpt = 1 << 3 // if set, the first Notify message (sent immediately) will contain the current NetMap
 
-	NotifyNoPrivateKeys        // if set, private keys that would normally be sent in updates are zeroed out
-	NotifyInitialDriveShares   // if set, the first Notify message (sent immediately) will contain the current Taildrive Shares
-	NotifyInitialOutgoingFiles // if set, the first Notify message (sent immediately) will contain the current Taildrop OutgoingFiles
+	NotifyNoPrivateKeys        NotifyWatchOpt = 1 << 4 // if set, private keys that would normally be sent in updates are zeroed out
+	NotifyInitialDriveShares   NotifyWatchOpt = 1 << 5 // if set, the first Notify message (sent immediately) will contain the current Taildrive Shares
+	NotifyInitialOutgoingFiles NotifyWatchOpt = 1 << 6 // if set, the first Notify message (sent immediately) will contain the current Taildrop OutgoingFiles
+
+	NotifyInitialHealthState NotifyWatchOpt = 1 << 7 // if set, the first Notify message (sent immediately) will contain the current health.State of the client
+
+	NotifyRateLimit NotifyWatchOpt = 1 << 8 // if set, rate limit spammy netmap updates to every few seconds
+
+	NotifyHealthActions NotifyWatchOpt = 1 << 9 // if set, include PrimaryActions in health.State. Otherwise append the action URL to the text
 )
 
 // Notify is a communication from a backend (e.g. tailscaled) to a frontend
@@ -97,7 +110,6 @@ type Notify struct {
 	NetMap        *netmap.NetworkMap // if non-nil, the new or current netmap
 	Engine        *EngineStatus      // if non-nil, the new or current wireguard stats
 	BrowseToURL   *string            // if non-nil, UI should open a browser right now
-	BackendLogID  *string            // if non-nil, the public logtail ID used by backend
 
 	// FilesWaiting if non-nil means that files are buffered in
 	// the Tailscale daemon and ready for local transfer to the
@@ -138,7 +150,12 @@ type Notify struct {
 	// empty value means that there are no shares.
 	DriveShares views.SliceView[*drive.Share, drive.ShareView]
 
-	// type is mirrored in xcode/Shared/IPN.swift
+	// Health is the last-known health state of the backend. When this field is
+	// non-nil, a change in health verified, and the API client should surface
+	// any changes to the user in the UI.
+	Health *health.State `json:",omitempty"`
+
+	// type is mirrored in xcode/IPN/Core/LocalAPI/Model/LocalAPIModel.swift
 }
 
 func (n Notify) String() string {
@@ -165,9 +182,6 @@ func (n Notify) String() string {
 	if n.BrowseToURL != nil {
 		sb.WriteString("URL=<...> ")
 	}
-	if n.BackendLogID != nil {
-		sb.WriteString("BackendLogID ")
-	}
 	if n.FilesWaiting != nil {
 		sb.WriteString("FilesWaiting ")
 	}
@@ -176,6 +190,9 @@ func (n Notify) String() string {
 	}
 	if n.LocalTCPPort != nil {
 		fmt.Fprintf(&sb, "tcpport=%v ", n.LocalTCPPort)
+	}
+	if n.Health != nil {
+		sb.WriteString("Health{...} ")
 	}
 	s := sb.String()
 	return s[0:len(s)-1] + "}"
@@ -227,6 +244,7 @@ type StateKey string
 var DebuggableComponents = []string{
 	"magicsock",
 	"sockstats",
+	"syspolicy",
 }
 
 type Options struct {

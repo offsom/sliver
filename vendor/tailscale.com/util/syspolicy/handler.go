@@ -4,17 +4,17 @@
 package syspolicy
 
 import (
-	"errors"
-	"sync/atomic"
-	"testing"
+	"tailscale.com/util/syspolicy/rsop"
+	"tailscale.com/util/syspolicy/setting"
+	"tailscale.com/util/syspolicy/source"
+	"tailscale.com/util/testenv"
 )
 
-var (
-	handlerUsed atomic.Bool
-	handler     Handler = defaultHandler{}
-)
+// TODO(nickkhyl): delete this file once other repos are updated.
 
 // Handler reads system policies from OS-specific storage.
+//
+// Deprecated: implementing a [source.Store] should be preferred.
 type Handler interface {
 	// ReadString reads the policy setting's string value for the given key.
 	// It should return ErrNoSuchKey if the key does not have a value set.
@@ -30,48 +30,84 @@ type Handler interface {
 	ReadStringArray(key string) ([]string, error)
 }
 
-// ErrNoSuchKey is returned by a Handler when the specified key does not have a
-// value set.
-var ErrNoSuchKey = errors.New("no such key")
-
-// defaultHandler is the catch all syspolicy type for anything that isn't windows or apple.
-type defaultHandler struct{}
-
-func (defaultHandler) ReadString(_ string) (string, error) {
-	return "", ErrNoSuchKey
-}
-
-func (defaultHandler) ReadUInt64(_ string) (uint64, error) {
-	return 0, ErrNoSuchKey
-}
-
-func (defaultHandler) ReadBoolean(_ string) (bool, error) {
-	return false, ErrNoSuchKey
-}
-
-func (defaultHandler) ReadStringArray(_ string) ([]string, error) {
-	return nil, ErrNoSuchKey
-}
-
-// markHandlerInUse is called before handler methods are called.
-func markHandlerInUse() {
-	handlerUsed.Store(true)
-}
-
-// RegisterHandler initializes the policy handler and ensures registration will happen once.
+// RegisterHandler wraps and registers the specified handler as the device's
+// policy [source.Store] for the program's lifetime.
+//
+// Deprecated: using [RegisterStore] should be preferred.
 func RegisterHandler(h Handler) {
-	// Technically this assignment is not concurrency safe, but in the
-	// event that there was any risk of a data race, we will panic due to
-	// the CompareAndSwap failing.
-	handler = h
-	if !handlerUsed.CompareAndSwap(false, true) {
-		panic("handler was already used before registration")
+	rsop.RegisterStore("DeviceHandler", setting.DeviceScope, WrapHandler(h))
+}
+
+// SetHandlerForTest wraps and sets the specified handler as the device's policy
+// [source.Store] for the duration of tb.
+//
+// Deprecated: using [MustRegisterStoreForTest] should be preferred.
+func SetHandlerForTest(tb testenv.TB, h Handler) {
+	RegisterWellKnownSettingsForTest(tb)
+	MustRegisterStoreForTest(tb, "DeviceHandler-TestOnly", setting.DefaultScope(), WrapHandler(h))
+}
+
+var _ source.Store = (*handlerStore)(nil)
+
+// handlerStore is a [source.Store] that calls the underlying [Handler].
+//
+// TODO(nickkhyl): remove it when the corp and android repos are updated.
+type handlerStore struct {
+	h Handler
+}
+
+// WrapHandler returns a [source.Store] that wraps the specified [Handler].
+func WrapHandler(h Handler) source.Store {
+	return handlerStore{h}
+}
+
+// Lock implements [source.Lockable].
+func (s handlerStore) Lock() error {
+	if lockable, ok := s.h.(source.Lockable); ok {
+		return lockable.Lock()
+	}
+	return nil
+}
+
+// Unlock implements [source.Lockable].
+func (s handlerStore) Unlock() {
+	if lockable, ok := s.h.(source.Lockable); ok {
+		lockable.Unlock()
 	}
 }
 
-func SetHandlerForTest(tb testing.TB, h Handler) {
-	tb.Helper()
-	oldHandler := handler
-	handler = h
-	tb.Cleanup(func() { handler = oldHandler })
+// RegisterChangeCallback implements [source.Changeable].
+func (s handlerStore) RegisterChangeCallback(callback func()) (unregister func(), err error) {
+	if changeable, ok := s.h.(source.Changeable); ok {
+		return changeable.RegisterChangeCallback(callback)
+	}
+	return func() {}, nil
+}
+
+// ReadString implements [source.Store].
+func (s handlerStore) ReadString(key setting.Key) (string, error) {
+	return s.h.ReadString(string(key))
+}
+
+// ReadUInt64 implements [source.Store].
+func (s handlerStore) ReadUInt64(key setting.Key) (uint64, error) {
+	return s.h.ReadUInt64(string(key))
+}
+
+// ReadBoolean implements [source.Store].
+func (s handlerStore) ReadBoolean(key setting.Key) (bool, error) {
+	return s.h.ReadBoolean(string(key))
+}
+
+// ReadStringArray implements [source.Store].
+func (s handlerStore) ReadStringArray(key setting.Key) ([]string, error) {
+	return s.h.ReadStringArray(string(key))
+}
+
+// Done implements [source.Expirable].
+func (s handlerStore) Done() <-chan struct{} {
+	if expirable, ok := s.h.(source.Expirable); ok {
+		return expirable.Done()
+	}
+	return nil
 }

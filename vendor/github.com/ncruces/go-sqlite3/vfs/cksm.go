@@ -47,11 +47,10 @@ type cksmFlags struct {
 
 func (c cksmFile) ReadAt(p []byte, off int64) (n int, err error) {
 	n, err = c.File.ReadAt(p, off)
+	p = p[:n]
 
-	// SQLite is reading the header of a database file.
-	if c.isDB && off == 0 && len(p) >= 100 &&
-		bytes.HasPrefix(p, []byte("SQLite format 3\000")) {
-		c.init(p)
+	if isHeader(c.isDB, p, off) {
+		c.init((*[100]byte)(p))
 	}
 
 	// Verify checksums.
@@ -66,10 +65,8 @@ func (c cksmFile) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func (c cksmFile) WriteAt(p []byte, off int64) (n int, err error) {
-	// SQLite is writing the first page of a database file.
-	if c.isDB && off == 0 && len(p) >= 100 &&
-		bytes.HasPrefix(p, []byte("SQLite format 3\000")) {
-		c.init(p)
+	if isHeader(c.isDB, p, off) {
+		c.init((*[100]byte)(p))
 	}
 
 	// Compute checksums.
@@ -102,32 +99,46 @@ func (c cksmFile) Pragma(name string, value string) (string, error) {
 }
 
 func (c cksmFile) DeviceCharacteristics() DeviceCharacteristic {
-	res := c.File.DeviceCharacteristics()
+	ret := c.File.DeviceCharacteristics()
 	if c.verifyCksm {
-		res &^= IOCAP_SUBPAGE_READ
+		ret &^= IOCAP_SUBPAGE_READ
 	}
-	return res
+	return ret
 }
 
-func (c cksmFile) fileControl(ctx context.Context, mod api.Module, op _FcntlOpcode, pArg uint32) _ErrorCode {
+func (c cksmFile) fileControl(ctx context.Context, mod api.Module, op _FcntlOpcode, pArg ptr_t) _ErrorCode {
 	switch op {
 	case _FCNTL_CKPT_START:
 		c.inCkpt = true
 	case _FCNTL_CKPT_DONE:
 		c.inCkpt = false
-	}
-	if rc := vfsFileControlImpl(ctx, mod, c, op, pArg); rc != _NOTFOUND {
-		return rc
+	case _FCNTL_PRAGMA:
+		rc := vfsFileControlImpl(ctx, mod, c, op, pArg)
+		if rc != _NOTFOUND {
+			return rc
+		}
 	}
 	return vfsFileControlImpl(ctx, mod, c.File, op, pArg)
 }
 
-func (f *cksmFlags) init(header []byte) {
+func (f *cksmFlags) init(header *[100]byte) {
 	f.pageSize = 256 * int(binary.LittleEndian.Uint16(header[16:18]))
 	if r := header[20] == 8; r != f.computeCksm {
 		f.computeCksm = r
 		f.verifyCksm = r
 	}
+	if !sql3util.ValidPageSize(f.pageSize) {
+		f.computeCksm = false
+		f.verifyCksm = false
+	}
+}
+
+func isHeader(isDB bool, p []byte, off int64) bool {
+	check := sql3util.ValidPageSize(len(p))
+	if isDB {
+		check = off == 0 && len(p) >= 100
+	}
+	return check && bytes.HasPrefix(p, []byte("SQLite format 3\000"))
 }
 
 func cksmCompute(a []byte) (cksm [8]byte) {

@@ -32,13 +32,20 @@ import (
 	"tailscale.com/net/tstun"
 	"tailscale.com/proxymap"
 	"tailscale.com/types/netmap"
+	"tailscale.com/util/eventbus"
+	"tailscale.com/util/usermetric"
 	"tailscale.com/wgengine"
 	"tailscale.com/wgengine/magicsock"
 	"tailscale.com/wgengine/router"
 )
 
 // System contains all the subsystems of a Tailscale node (tailscaled, etc.)
+//
+// A valid System value must always have a non-nil Bus populated.  Callers must
+// ensure this before using the value further. Call [NewSystem] to obtain a
+// value ready to use.
 type System struct {
+	Bus            SubSystem[*eventbus.Bus]
 	Dialer         SubSystem[*tsdial.Dialer]
 	DNSManager     SubSystem[*dns.Manager] // can get its *resolver.Resolver from DNSManager.Resolver
 	Engine         SubSystem[wgengine.Engine]
@@ -65,7 +72,16 @@ type System struct {
 	controlKnobs controlknobs.Knobs
 	proxyMap     proxymap.Mapper
 
-	healthTracker health.Tracker
+	healthTracker       health.Tracker
+	userMetricsRegistry usermetric.Registry
+}
+
+// NewSystem constructs a new otherwise-empty [System] with a
+// freshly-constructed event bus populated.
+func NewSystem() *System {
+	sys := new(System)
+	sys.Set(eventbus.New())
+	return sys
 }
 
 // NetstackImpl is the interface that *netstack.Impl implements.
@@ -80,6 +96,8 @@ type NetstackImpl interface {
 // has already been set.
 func (s *System) Set(v any) {
 	switch v := v.(type) {
+	case *eventbus.Bus:
+		s.Bus.Set(v)
 	case *netmon.Monitor:
 		s.NetMon.Set(v)
 	case *dns.Manager:
@@ -140,6 +158,11 @@ func (s *System) ProxyMapper() *proxymap.Mapper {
 // HealthTracker returns the system health tracker.
 func (s *System) HealthTracker() *health.Tracker {
 	return &s.healthTracker
+}
+
+// UserMetricsRegistry returns the system usermetrics.
+func (s *System) UserMetricsRegistry() *usermetric.Registry {
+	return &s.userMetricsRegistry
 }
 
 // SubSystem represents some subsystem of the Tailscale node daemon.
