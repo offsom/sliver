@@ -171,11 +171,11 @@ func (p *ChannelProxy) HostPort() (string, uint32) {
 		log.Printf("Failed to parse number from %s", rawPort)
 		return "", defaultPort
 	}
-	port := uint32(portNumber)
 	if portNumber < 1 || portNumber > 65535 {
 		log.Printf("Invalid port number %d", portNumber)
 		return "", defaultPort
 	}
+	port := uint32(portNumber)
 	return host, port
 }
 
