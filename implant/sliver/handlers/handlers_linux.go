@@ -30,6 +30,7 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+	"math"
 
 	"github.com/bishopfox/sliver/implant/sliver/mount"
 	"github.com/bishopfox/sliver/implant/sliver/procdump"
@@ -437,6 +438,11 @@ func chownHandler(data []byte, resp RPCResponse) {
 		chown.Response.Err = err.Error()
 		goto finished
 	}
+	// Bounds check: ensure uid fits in int32
+	if uid > uint64(math.MaxInt32) {
+		chown.Response.Err = fmt.Sprintf("UID value %d exceeds maximum allowed (%d)", uid, math.MaxInt32)
+		goto finished
+	}
 
 	gid_str = chownReq.Gid
 	grp, err = user.LookupGroup(gid_str)
@@ -448,6 +454,11 @@ func chownHandler(data []byte, resp RPCResponse) {
 	gid, err = strconv.ParseUint(grp.Gid, 10, 32)
 	if err != nil {
 		chown.Response.Err = err.Error()
+		goto finished
+	}
+	// Bounds check: ensure gid fits in int32
+	if gid > uint64(math.MaxInt32) {
+		chown.Response.Err = fmt.Sprintf("GID value %d exceeds maximum allowed (%d)", gid, math.MaxInt32)
 		goto finished
 	}
 
