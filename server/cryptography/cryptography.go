@@ -34,6 +34,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"math"
 
 	"filippo.io/age"
 	"github.com/bishopfox/sliver/server/db"
@@ -204,7 +205,17 @@ func Encrypt(key [chacha20poly1305.KeySize]byte, plaintext []byte) ([]byte, erro
 	}
 	compressed, _ := encoders.GzipBuf(plaintext)
 	plaintext = bytes.NewBuffer(compressed).Bytes()
-	nonce := make([]byte, aead.NonceSize(), aead.NonceSize()+len(plaintext)+aead.Overhead())
+	// Validate size to prevent integer overflow
+	const maxPlaintextSize = 64 * 1024 * 1024 // 64 MB
+	if len(plaintext) > maxPlaintextSize {
+		return nil, errors.New("plaintext too large")
+	}
+	// Check for overflow in allocation
+	totalSize := aead.NonceSize() + len(plaintext) + aead.Overhead()
+	if totalSize < 0 || totalSize > math.MaxInt {
+		return nil, errors.New("allocation size overflow")
+	}
+	nonce := make([]byte, aead.NonceSize(), totalSize)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
