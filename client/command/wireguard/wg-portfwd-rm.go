@@ -45,6 +45,11 @@ func WGPortFwdRmCmd(cmd *cobra.Command, con *console.SliverClient, args []string
 		con.PrintErrorf("Error converting portforward ID (%s) to int: %s", args[0], err.Error())
 		return
 	}
+	// Validate fwdID range for int32 conversion
+	if fwdID < 0 || fwdID > 0x7fffffff {
+		con.PrintErrorf("Invalid portforward ID: %d (out of range for int32)", fwdID)
+		return
+	}
 
 	stopReq, err := con.Rpc.WGStopPortForward(context.Background(), &sliverpb.WGPortForwardStopReq{
 		ID:      int32(fwdID),

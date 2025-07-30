@@ -95,11 +95,12 @@ func getTLSConfig(caCertificate string, certificate string, privateKey string) (
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM([]byte(caCertificate))
 
-	// Setup config with custom certificate validation routine
+	// Setup config with secure certificate validation
 	tlsConfig := &tls.Config{
 		Certificates:       []tls.Certificate{certPEM},
 		RootCAs:            caCertPool,
-		InsecureSkipVerify: true, // Don't worry I sorta know what I'm doing
+		InsecureSkipVerify: false,            // Enable certificate verification
+		MinVersion:         tls.VersionTLS12, // Force minimum TLS 1.2
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			return RootOnlyVerifyCertificate(caCertificate, rawCerts)
 		},

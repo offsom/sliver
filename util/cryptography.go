@@ -30,7 +30,14 @@ import (
 // RC4 encryption - Cryptographically insecure!
 // Added for stage-listener shellcode obfuscation
 // Dont use for anything else!
+// DEPRECATED: This function is cryptographically insecure and should not be used
+// in production environments. Use AES-GCM or ChaCha20-Poly1305 instead.
 func RC4EncryptUnsafe(data []byte, key []byte) []byte {
+	// Validate key length for RC4 (should be 1-256 bytes)
+	if len(key) == 0 || len(key) > 256 {
+		return make([]byte, 0)
+	}
+
 	cipher, err := rc4.NewCipher(key)
 	if err != nil {
 		return make([]byte, 0)
@@ -47,6 +54,12 @@ func PreludeEncrypt(data []byte, key []byte, iv []byte) []byte {
 		return make([]byte, 0)
 	}
 	block, _ := aes.NewCipher(key)
+
+	// Check for integer overflow
+	if len(plainText) > 0 && aes.BlockSize > (1<<31-1)-len(plainText) {
+		return make([]byte, 0)
+	}
+
 	cipherText := make([]byte, aes.BlockSize+len(plainText))
 	// Create a random IV if none was provided
 	// len(nil) returns 0
@@ -81,6 +94,12 @@ func PreludeDecrypt(data []byte, key []byte) []byte {
 func pad(buf []byte, size int) ([]byte, error) {
 	bufLen := len(buf)
 	padLen := size - bufLen%size
+
+	// Check for integer overflow
+	if bufLen > 0 && padLen > 0 && bufLen > (1<<31-1)-padLen {
+		return nil, errors.New("pkcs7: Input too large, would cause integer overflow")
+	}
+
 	padded := make([]byte, bufLen+padLen)
 	copy(padded, buf)
 	for i := 0; i < padLen; i++ {
@@ -93,7 +112,22 @@ func unpad(padded []byte, size int) ([]byte, error) {
 	if len(padded)%size != 0 {
 		return nil, errors.New("pkcs7: Padded value wasn't in correct size")
 	}
-	bufLen := len(padded) - int(padded[len(padded)-1])
+
+	// Check for buffer underflow
+	if len(padded) == 0 {
+		return nil, errors.New("pkcs7: Empty padded data")
+	}
+
+	padLen := int(padded[len(padded)-1])
+	if padLen <= 0 || padLen > len(padded) {
+		return nil, errors.New("pkcs7: Invalid padding length")
+	}
+
+	bufLen := len(padded) - padLen
+	if bufLen < 0 {
+		return nil, errors.New("pkcs7: Invalid buffer length")
+	}
+
 	buf := make([]byte, bufLen)
 	copy(buf, padded[:bufLen])
 	return buf, nil

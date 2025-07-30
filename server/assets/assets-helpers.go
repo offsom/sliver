@@ -97,6 +97,11 @@ func unzipBuf(src []byte, dest string) ([]string, error) {
 		}
 		defer rc.Close()
 
+		// Prevent Zip Slip vulnerability by validating the file path
+		if !isPathSafe(dest, file.Name) {
+			continue // Skip malicious files
+		}
+
 		fPath := filepath.Join(dest, file.Name)
 		filenames = append(filenames, fPath)
 
@@ -732,4 +737,23 @@ func setupCodenames(appDir string) error {
 		return err
 	}
 	return nil
+}
+
+// isPathSafe checks if a file path is safe from Zip Slip attacks
+func isPathSafe(dest, fileName string) bool {
+	// Clean the file name to remove any path traversal attempts
+	cleanName := filepath.Clean(fileName)
+
+	// Check for path traversal attempts
+	if strings.Contains(cleanName, "..") {
+		return false
+	}
+
+	// Construct the full path and ensure it's within the destination directory
+	fullPath := filepath.Join(dest, cleanName)
+	cleanDest := filepath.Clean(dest)
+	cleanFullPath := filepath.Clean(fullPath)
+
+	// Check if the resolved path is within the destination directory
+	return strings.HasPrefix(cleanFullPath, cleanDest)
 }

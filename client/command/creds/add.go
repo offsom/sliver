@@ -130,7 +130,10 @@ func CredsAddHashFileCmd(cmd *cobra.Command, con *console.SliverClient, args []s
 func parseHashType(raw string) clientpb.HashType {
 	hashInt, err := strconv.Atoi(raw)
 	if err == nil {
-		return clientpb.HashType(hashInt)
+		// Validate the hash type value is within valid range (max known value is 28000)
+		if hashInt >= 0 && hashInt <= 28000 {
+			return clientpb.HashType(hashInt)
+		}
 	}
 	return clientpb.HashType_INVALID
 }

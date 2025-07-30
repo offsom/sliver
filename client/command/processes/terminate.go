@@ -44,6 +44,12 @@ func TerminateCmd(cmd *cobra.Command, con *console.SliverClient, args []string) 
 		return
 	}
 
+	// Validate PID range for int32 conversion
+	if pid < 0 || pid > 0x7fffffff {
+		con.PrintErrorf("Invalid PID: %d (out of range for int32)", pid)
+		return
+	}
+
 	force, _ := cmd.Flags().GetBool("force")
 
 	terminated, err := con.Rpc.Terminate(context.Background(), &sliverpb.TerminateReq{

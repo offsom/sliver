@@ -728,6 +728,10 @@ func getExtArgs(_ *cobra.Command, args []string, _ string, ext *ExtCommand) ([]b
 			if err != nil {
 				return nil, err
 			}
+			// Validate int32 range for uint32 conversion
+			if val < 0 || val > 0x7fffffff {
+				return nil, fmt.Errorf("int value %d out of range for uint32", val)
+			}
 			err = argsBuffer.AddInt(uint32(val))
 			if err != nil {
 				return nil, err
@@ -736,6 +740,10 @@ func getExtArgs(_ *cobra.Command, args []string, _ string, ext *ExtCommand) ([]b
 			val, err := strconv.Atoi(word)
 			if err != nil {
 				return nil, err
+			}
+			// Validate int16 range for uint16 conversion
+			if val < 0 || val > 0x7fff {
+				return nil, fmt.Errorf("short value %d out of range for uint16", val)
 			}
 			err = argsBuffer.AddShort(uint16(val))
 			if err != nil {

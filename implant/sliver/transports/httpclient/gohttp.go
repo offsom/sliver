@@ -28,7 +28,9 @@ import (
 
 	// {{if .Config.Debug}}
 	"log"
+
 	"github.com/bishopfox/sliver/implant/sliver/cryptography"
+
 	// {{end}}
 
 	"github.com/bishopfox/sliver/implant/sliver/proxy"
@@ -38,7 +40,8 @@ import (
 func GoHTTPDriver(origin string, secure bool, opts *HTTPOptions) (HTTPDriver, error) {
 	var transport *http.Transport
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // We don't care about the HTTP(S) layer certs
+		InsecureSkipVerify: false,            // Enable certificate verification for security
+		MinVersion:         tls.VersionTLS12, // Force minimum TLS 1.2
 	}
 	// {{if .Config.Debug}}
 	if cryptography.TLSKeyLogger != nil {

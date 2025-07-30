@@ -21,6 +21,7 @@ package rpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"time"
@@ -85,6 +86,12 @@ func (rpc *Server) GetVersion(ctx context.Context, _ *commonpb.Empty) (*clientpb
 	dirty := version.GitDirty != ""
 	semVer := version.SemanticVersion()
 	compiled, _ := version.Compiled()
+
+	// Ensure we have at least 3 version components
+	if len(semVer) < 3 {
+		return nil, fmt.Errorf("invalid semantic version: expected at least 3 components, got %d", len(semVer))
+	}
+
 	return &clientpb.Version{
 		Major:      int32(semVer[0]),
 		Minor:      int32(semVer[1]),

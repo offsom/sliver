@@ -235,50 +235,20 @@ func getHTTPSConfig(req *clientpb.HTTPListenerReq) *tls.Config {
 		return tlsConfig
 	}
 
-	// Randomize the JARM fingerprint
-	switch insecureRand.Intn(4) {
+	// Security: Force minimum TLS 1.2 for all connections
+	// Modern systems support TLS 1.2, older systems should be updated
+	tlsConfig.MinVersion = tls.VersionTLS12
 
-	// So it turns out that Windows by default
-	// disables TLS v1.2 because it's horrible.
-	// So anyways for compatibility we'll specify
-	// a min of 1.1 or 1.0
-
-	case 0:
-		// tlsConfig.MinVersion = tls.VersionTLS13
-		fallthrough // For compatibility with winhttp
-	case 1:
-		// tlsConfig.MinVersion = tls.VersionTLS12
-		fallthrough // For compatibility with winhttp
-	case 2:
-		tlsConfig.MinVersion = tls.VersionTLS11
-	default:
-		tlsConfig.MinVersion = tls.VersionTLS10
-	}
-
-	// Randomize the cipher suites
+	// Use only secure cipher suites (removed RC4, 3DES, and weak CBC modes)
 	allCipherSuites := []uint16{
-		tls.TLS_RSA_WITH_RC4_128_SHA,                      //uint16 = 0x0005 1
-		tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,                 //uint16 = 0x000a 2
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA,                  //uint16 = 0x002f 3
-		tls.TLS_RSA_WITH_AES_256_CBC_SHA,                  //uint16 = 0x0035 4
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA256,               //uint16 = 0x003c 5
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,               //uint16 = 0x009c 6
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,               //uint16 = 0x009d 7
-		tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,              //uint16 = 0xc007 8
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,          //uint16 = 0xc009 9
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,          //uint16 = 0xc00a 10
-		tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,                //uint16 = 0xc011 11
-		tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,           //uint16 = 0xc012 12
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,            //uint16 = 0xc013 13
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,            //uint16 = 0xc014 14
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,       //uint16 = 0xc023 15
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,         //uint16 = 0xc027 16
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,         //uint16 = 0xc02f 17
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,       //uint16 = 0xc02b 18
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,         //uint16 = 0xc030 19
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,       //uint16 = 0xc02c 20
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,   //uint16 = 0xcca8 21
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, //uint16 = 0xcca9 22
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,         //uint16 = 0xc02f
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,       //uint16 = 0xc02b
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,         //uint16 = 0xc030
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,       //uint16 = 0xc02c
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,   //uint16 = 0xcca8
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, //uint16 = 0xcca9
+		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,         //uint16 = 0xc027
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,       //uint16 = 0xc023
 	}
 	// CipherSuites ignores the order of the ciphers, this random shuffle
 	// is truncated resulting in a random selection from all ciphers
