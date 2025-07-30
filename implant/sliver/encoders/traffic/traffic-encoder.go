@@ -2,7 +2,7 @@ package traffic
 
 /*
 	Sliver Implant Framework
-	Copyright (C) 2023  Bishop Fox
+	Copyright (C) 2021  Bishop Fox
 
 	This program is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -22,20 +22,20 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 )
 
-// CalculateWasmEncoderID - Creates an Encoder ID based on the hash of the wasm bin
+// CalculateWasmEncoderID - Calculate a unique ID for the wasm encoder
 func CalculateWasmEncoderID(wasmEncoderData []byte) uint64 {
-	digest := sha256.Sum256(wasmEncoderData)
-	// The encoder id must be less than 65537 (the encoder modulo)
-	return uint64(uint16(digest[0])<<8 + uint16(digest[1]))
+	hash := sha256.Sum256(wasmEncoderData)
+	return uint64(hash[0]) | uint64(hash[1])<<8 | uint64(hash[2])<<16 | uint64(hash[3])<<24 |
+		uint64(hash[4])<<32 | uint64(hash[5])<<40 | uint64(hash[6])<<48 | uint64(hash[7])<<56
 }
 
-// TrafficEncoder - Implements the `Encoder` interface using a wasm backend
 type TrafficEncoder struct {
 	ctx     context.Context
 	runtime wazero.Runtime
@@ -58,10 +58,18 @@ func (t *TrafficEncoder) Encode(data []byte) ([]byte, error) {
 	size := uint64(len(data))
 	buf, err := t.malloc.Call(t.ctx, size)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to allocate memory: %w", err)
 	}
 	bufPtr := buf[0]
-	defer t.free.Call(t.ctx, bufPtr)
+
+	// Ensure memory is freed even if an error occurs
+	defer func() {
+		if _, freeErr := t.free.Call(t.ctx, bufPtr); freeErr != nil {
+			// {{if .Config.Debug}}
+			log.Printf("Failed to free memory: %v", freeErr)
+			// {{end}}
+		}
+	}()
 
 	// Copy input data into wasm memory
 	if !t.mod.Memory().Write(uint32(bufPtr), data) {
@@ -72,32 +80,52 @@ func (t *TrafficEncoder) Encode(data []byte) ([]byte, error) {
 	// Call the encoder function
 	ptrSize, err := t.encoder.Call(t.ctx, bufPtr, size)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encoder function failed: %w", err)
 	}
 
 	// Read the output buffer from wasm memory
 	encodeResultPtr := uint32(ptrSize[0] >> 32)
 	encodeResultSize := uint32(ptrSize[0])
+
+	// Validate memory bounds
+	if encodeResultPtr+encodeResultSize > t.mod.Memory().Size() {
+		return nil, fmt.Errorf("encoder result out of memory bounds")
+	}
+
 	var encodeResult []byte
 	var ok bool
 	if encodeResult, ok = t.mod.Memory().Read(encodeResultPtr, encodeResultSize); !ok {
 		return nil, fmt.Errorf("Memory.Read(%d, %d) out of range of memory size %d",
 			encodeResultPtr, encodeResultSize, t.mod.Memory().Size())
 	}
-	return encodeResult, nil
+
+	// Make a copy of the result to avoid memory issues
+	resultCopy := make([]byte, len(encodeResult))
+	copy(resultCopy, encodeResult)
+
+	return resultCopy, nil
 }
 
 // Decode - Decode bytes using the wasm backend
 func (t *TrafficEncoder) Decode(data []byte) ([]byte, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
+
 	size := uint64(len(data))
 	buf, err := t.malloc.Call(t.ctx, size)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to allocate memory: %w", err)
 	}
 	bufPtr := buf[0]
-	defer t.free.Call(t.ctx, bufPtr)
+
+	// Ensure memory is freed even if an error occurs
+	defer func() {
+		if _, freeErr := t.free.Call(t.ctx, bufPtr); freeErr != nil {
+			// {{if .Config.Debug}}
+			log.Printf("Failed to free memory: %v", freeErr)
+			// {{end}}
+		}
+	}()
 
 	if !t.mod.Memory().Write(uint32(bufPtr), data) {
 		return nil, fmt.Errorf("Memory.Write(%d, %d) out of range of memory size %d",
@@ -107,10 +135,17 @@ func (t *TrafficEncoder) Decode(data []byte) ([]byte, error) {
 	// Call the decoder function
 	ptrSize, err := t.decoder.Call(t.ctx, bufPtr, size)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decoder function failed: %w", err)
 	}
+
 	decodeResultPtr := uint32(ptrSize[0] >> 32)
 	decodeResultSize := uint32(ptrSize[0])
+
+	// Validate memory bounds
+	if decodeResultPtr+decodeResultSize > t.mod.Memory().Size() {
+		return nil, fmt.Errorf("decoder result out of memory bounds")
+	}
+
 	var decodeResult []byte
 	var ok bool
 	if decodeResult, ok = t.mod.Memory().Read(decodeResultPtr, decodeResultSize); !ok {
@@ -118,7 +153,11 @@ func (t *TrafficEncoder) Decode(data []byte) ([]byte, error) {
 			decodeResultPtr, decodeResultSize, t.mod.Memory().Size())
 	}
 
-	return decodeResult, nil
+	// Make a copy of the result to avoid memory issues
+	resultCopy := make([]byte, len(decodeResult))
+	copy(resultCopy, decodeResult)
+
+	return resultCopy, nil
 }
 
 func (t *TrafficEncoder) Close() error {

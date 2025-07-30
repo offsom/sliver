@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/server/configs"
@@ -100,12 +101,17 @@ func initMiddleware(enableAuth bool) []grpc.ServerOption {
 }
 
 var (
-	tokenCache = sync.Map{}
+	tokenCache       = sync.Map{}
+	tokenCacheExpiry = make(map[string]time.Time)
+	tokenCacheMutex  = sync.RWMutex{}
 )
 
 // ClearTokenCache - Clear the auth token cache
 func ClearTokenCache() {
 	tokenCache = sync.Map{}
+	tokenCacheMutex.Lock()
+	tokenCacheExpiry = make(map[string]time.Time)
+	tokenCacheMutex.Unlock()
 }
 
 func serverAuthFunc(ctx context.Context) (context.Context, error) {
@@ -122,22 +128,43 @@ func tokenAuthFunc(ctx context.Context) (context.Context, error) {
 		return nil, status.Error(codes.Unauthenticated, "Authentication failure")
 	}
 
-	// Check auth cache
+	// Check auth cache with expiry
 	digest := sha256.Sum256([]byte(rawToken))
 	token := hex.EncodeToString(digest[:])
+
+	tokenCacheMutex.RLock()
+	expiry, exists := tokenCacheExpiry[token]
+	tokenCacheMutex.RUnlock()
+
+	// Check if token is expired (30 minute cache)
+	if exists && time.Now().After(expiry) {
+		tokenCacheMutex.Lock()
+		delete(tokenCacheExpiry, token)
+		tokenCacheMutex.Unlock()
+		tokenCache.Delete(token)
+		exists = false
+	}
+
 	newCtx := context.WithValue(ctx, Transport, "mtls")
-	if op, ok := tokenCache.Load(token); ok {
+	if op, ok := tokenCache.Load(token); ok && exists {
 		mtlsLog.Debugf("Token in cache!")
 		newCtx = context.WithValue(newCtx, Operator, op.(*models.Operator))
 		return newCtx, nil
 	}
+
 	operator, err := db.OperatorByToken(token)
 	if err != nil || operator == nil {
 		mtlsLog.Errorf("Authentication failure: %v", err)
 		return nil, status.Error(codes.Unauthenticated, "Authentication failure")
 	}
+
 	mtlsLog.Debugf("Valid token for %s", operator.Name)
 	tokenCache.Store(token, operator)
+
+	// Set cache expiry
+	tokenCacheMutex.Lock()
+	tokenCacheExpiry[token] = time.Now().Add(30 * time.Minute)
+	tokenCacheMutex.Unlock()
 
 	newCtx = context.WithValue(newCtx, Operator, operator)
 	return newCtx, nil

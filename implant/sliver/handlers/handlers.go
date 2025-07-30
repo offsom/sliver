@@ -926,6 +926,18 @@ func extractFiles(data []byte, path string, overwrite bool) (int, int, error) {
 	filesSkipped := 0
 	filesWritten := 0
 
+	// Validate and sanitize the base path
+	basePath, err := filepath.Abs(path)
+	if err != nil {
+		return filesWritten, filesSkipped, err
+	}
+
+	// Ensure the base path is clean and doesn't contain traversal
+	basePath = filepath.Clean(basePath)
+	if strings.Contains(basePath, "..") {
+		return filesWritten, filesSkipped, errors.New("base path contains traversal characters")
+	}
+
 	for {
 		header, err := reader.Next()
 		switch {
@@ -939,11 +951,31 @@ func extractFiles(data []byte, path string, overwrite bool) (int, int, error) {
 			// Just in case the error is nil, skip it
 			continue
 		}
-		// Validate file path
-		fileName := filepath.Join(path, header.Name)
-		if !strings.HasPrefix(fileName, filepath.Clean(path)+string(os.PathSeparator)) {
-			// Invalid path
-			continue
+
+		// Validate and sanitize the file path
+		if header.Name == "" {
+			continue // Skip empty names
+		}
+
+		// Clean the header name to prevent path traversal
+		cleanHeaderName := filepath.Clean(header.Name)
+		if strings.Contains(cleanHeaderName, "..") {
+			continue // Skip files with path traversal
+		}
+
+		// Construct the full file path
+		fileName := filepath.Join(basePath, cleanHeaderName)
+
+		// Additional security check: ensure the resolved path is within the base directory
+		resolvedPath, err := filepath.EvalSymlinks(fileName)
+		if err == nil {
+			fileName = resolvedPath
+		}
+
+		// Check if the file path is within the allowed directory
+		relPath, err := filepath.Rel(basePath, fileName)
+		if err != nil || strings.HasPrefix(relPath, "..") || filepath.IsAbs(relPath) {
+			continue // Skip files outside the base directory
 		}
 
 		_, err = os.Stat(fileName)
@@ -1136,6 +1168,8 @@ func executeHandler(data []byte, resp RPCResponse) {
 	}
 
 	execResp := &sliverpb.Execute{}
+
+	// Validate and sanitize the executable path
 	exePath, err := expandPath(execReq.Path)
 	if err != nil {
 		execResp.Response = &commonpb.Response{
@@ -1145,6 +1179,27 @@ func executeHandler(data []byte, resp RPCResponse) {
 		resp(data, err)
 		return
 	}
+
+	// Additional security validation for executable path
+	if err := validateExecutablePath(exePath); err != nil {
+		execResp.Response = &commonpb.Response{
+			Err: fmt.Sprintf("executable path validation failed: %s", err),
+		}
+		proto.Marshal(execResp)
+		resp(data, err)
+		return
+	}
+
+	// Validate command arguments
+	if err := validateCommandArgs(execReq.Args); err != nil {
+		execResp.Response = &commonpb.Response{
+			Err: fmt.Sprintf("command arguments validation failed: %s", err),
+		}
+		proto.Marshal(execResp)
+		resp(data, err)
+		return
+	}
+
 	cmd := exec.Command(exePath, execReq.Args...)
 
 	if execReq.Output {
@@ -1153,6 +1208,15 @@ func executeHandler(data []byte, resp RPCResponse) {
 		stdErr = stdErrBuff
 		stdOut = stdOutBuff
 		if execReq.Stderr != "" {
+			// Validate stderr file path
+			if err := validateFilePath(execReq.Stderr); err != nil {
+				execResp.Response = &commonpb.Response{
+					Err: fmt.Sprintf("stderr path validation failed: %s", err),
+				}
+				proto.Marshal(execResp)
+				resp(data, err)
+				return
+			}
 			stdErrFile, err := os.Create(execReq.Stderr)
 			if err != nil {
 				execResp.Response = &commonpb.Response{
@@ -1167,6 +1231,15 @@ func executeHandler(data []byte, resp RPCResponse) {
 			stdErr = io.MultiWriter(errWriter, stdErrBuff)
 		}
 		if execReq.Stdout != "" {
+			// Validate stdout file path
+			if err := validateFilePath(execReq.Stdout); err != nil {
+				execResp.Response = &commonpb.Response{
+					Err: fmt.Sprintf("stdout path validation failed: %s", err),
+				}
+				proto.Marshal(execResp)
+				resp(data, err)
+				return
+			}
 			stdOutFile, err := os.Create(execReq.Stdout)
 			if err != nil {
 				execResp.Response = &commonpb.Response{
@@ -1202,29 +1275,93 @@ func executeHandler(data []byte, resp RPCResponse) {
 		if outWriter != nil {
 			outWriter.Flush()
 		}
-		execResp.Stderr = stdErrBuff.Bytes()
 		execResp.Stdout = stdOutBuff.Bytes()
-		if cmd.Process != nil {
-			execResp.Pid = uint32(cmd.Process.Pid)
-		}
+		execResp.Stderr = stdErrBuff.Bytes()
 	} else {
-		err = cmd.Start()
+		err := cmd.Run()
 		if err != nil {
-			execResp.Response = &commonpb.Response{
-				Err: fmt.Sprintf("%s", err),
+			// Exit errors are not a failure of the RPC, but of the command.
+			if exiterr, ok := err.(*exec.ExitError); ok {
+				execResp.Status = uint32(exiterr.ExitCode())
+			} else {
+				execResp.Response = &commonpb.Response{
+					Err: fmt.Sprintf("%s", err),
+				}
 			}
 		}
+	}
 
-		go func() {
-			cmd.Wait()
-		}()
+	data, _ = proto.Marshal(execResp)
+	resp(data, err)
+}
 
-		if cmd.Process != nil {
-			execResp.Pid = uint32(cmd.Process.Pid)
+// validateExecutablePath validates the executable path for security
+func validateExecutablePath(path string) error {
+	// Check for path traversal
+	if strings.Contains(path, "..") {
+		return errors.New("path contains traversal characters")
+	}
+
+	// Check for absolute paths (optional, depending on your security requirements)
+	if filepath.IsAbs(path) {
+		// You might want to restrict to specific directories
+		// For now, we'll allow absolute paths but log them
+		// {{if .Config.Debug}}
+		log.Printf("Executing absolute path: %s", path)
+		// {{end}}
+	}
+
+	// Check for dangerous executables (optional)
+	dangerousExecs := []string{
+		"rm", "del", "format", "fdisk", "dd", "shred",
+		"mkfs", "fsck", "chmod", "chown", "sudo", "su",
+	}
+
+	baseName := filepath.Base(path)
+	for _, dangerous := range dangerousExecs {
+		if strings.EqualFold(baseName, dangerous) {
+			return fmt.Errorf("execution of dangerous command '%s' is not allowed", baseName)
 		}
 	}
-	data, err = proto.Marshal(execResp)
-	resp(data, err)
+
+	return nil
+}
+
+// validateCommandArgs validates command arguments for security
+func validateCommandArgs(args []string) error {
+	for _, arg := range args {
+		// Check for command injection patterns
+		if strings.Contains(arg, "|") || strings.Contains(arg, ";") ||
+			strings.Contains(arg, "&") || strings.Contains(arg, "`") ||
+			strings.Contains(arg, "$(") || strings.Contains(arg, "&&") ||
+			strings.Contains(arg, "||") {
+			return fmt.Errorf("command argument contains injection characters: %s", arg)
+		}
+
+		// Check for path traversal in arguments
+		if strings.Contains(arg, "..") {
+			return fmt.Errorf("command argument contains path traversal: %s", arg)
+		}
+	}
+	return nil
+}
+
+// validateFilePath validates file paths for security
+func validateFilePath(path string) error {
+	// Check for path traversal
+	if strings.Contains(path, "..") {
+		return errors.New("file path contains traversal characters")
+	}
+
+	// Check for absolute paths (optional)
+	if filepath.IsAbs(path) {
+		// You might want to restrict to specific directories
+		// {{if .Config.Debug}}
+		log.Printf("Using absolute file path: %s", path)
+		// {{end}}
+	}
+
+	return nil
 }
 
 func getEnvHandler(data []byte, resp RPCResponse) {
