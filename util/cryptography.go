@@ -25,6 +25,7 @@ import (
 	"crypto/rc4"
 	"errors"
 	"io"
+	"math"
 )
 
 // RC4 encryption - Cryptographically insecure!
@@ -92,11 +93,15 @@ func PreludeDecrypt(data []byte, key []byte) []byte {
 }
 
 func pad(buf []byte, size int) ([]byte, error) {
+	const maxPadInputSize = 64 * 1024 * 1024 // 64 MiB
 	bufLen := len(buf)
+	if bufLen > maxPadInputSize {
+		return nil, errors.New("pkcs7: Input too large")
+	}
 	padLen := size - bufLen%size
 
-	// Check for integer overflow
-	if bufLen > 0 && padLen > 0 && bufLen > (1<<31-1)-padLen {
+	// Check for integer overflow (platform independent)
+	if bufLen > 0 && padLen > 0 && bufLen > (math.MaxInt - padLen) {
 		return nil, errors.New("pkcs7: Input too large, would cause integer overflow")
 	}
 
