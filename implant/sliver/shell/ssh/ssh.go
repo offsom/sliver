@@ -3,6 +3,7 @@ package ssh
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 
 	// {{if .Config.Debug}}
 	"log"
@@ -17,7 +18,7 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-func getClient(host string, port uint16, username string, password string, privKey []byte, krb5conf string, keytab []byte, realm string) (*ssh.Client, error) {
+func getClient(host string, port uint16, username string, password string, privKey []byte, krb5conf string, keytab []byte, realm string, allowedHostKeyPath string) (*ssh.Client, error) {
 	var authMethods []ssh.AuthMethod
 	if password != "" {
 		// Try password auth first
@@ -56,12 +57,18 @@ func getClient(host string, port uint16, username string, password string, privK
 	log.Printf("Auth methods: %+v\n", authMethods)
 	// {{end}}
 
+	// Load allowed host public key
+	publicKey, err := loadHostPublicKey(allowedHostKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load allowed host public key: %w", err)
+	}
+
 	// Create a more secure SSH client configuration
 	config := &ssh.ClientConfig{
 		User: username,
 		Auth: authMethods,
-		// Use a more secure host key callback
-		HostKeyCallback: createHostKeyCallback(),
+		// Use a secure host key callback
+		HostKeyCallback: ssh.FixedHostKey(publicKey),
 		// Add timeout to prevent hanging connections
 		Timeout: 30 * time.Second,
 		// Disable algorithms that are known to be weak
@@ -95,19 +102,17 @@ func getClient(host string, port uint16, username string, password string, privK
 	return sshc, nil
 }
 
-// createHostKeyCallback creates a secure host key callback
-func createHostKeyCallback() ssh.HostKeyCallback {
-	// For now, we'll use a more secure approach than InsecureIgnoreHostKey
-	// This will log the host key for verification
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		// {{if .Config.Debug}}
-		log.Printf("Host key verification for %s: %s", hostname, ssh.FingerprintSHA256(key))
-		// {{end}}
-
-		// In a production environment, you might want to implement
-		// a proper host key verification mechanism using known_hosts
-		return nil
+// loadHostPublicKey loads the allowed host public key from a file
+func loadHostPublicKey(path string) (ssh.PublicKey, error) {
+	publicKeyBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
+	publicKey, err := ssh.ParsePublicKey(publicKeyBytes)
+	if err != nil {
+		return nil, err
+	}
+	return publicKey, nil
 }
 
 // RunSSHCommand - SSH to a host and execute a command
