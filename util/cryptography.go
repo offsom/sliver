@@ -95,17 +95,22 @@ func PreludeDecrypt(data []byte, key []byte) []byte {
 func pad(buf []byte, size int) ([]byte, error) {
 	const maxPadInputSize = 64 * 1024 * 1024 // 64 MiB
 	bufLen := len(buf)
-	if bufLen > maxPadInputSize {
-		return nil, errors.New("pkcs7: Input too large")
+	if bufLen < 0 || bufLen > maxPadInputSize {
+		return nil, errors.New("pkcs7: Input too large or negative")
 	}
 	padLen := size - bufLen%size
-
+	if padLen <= 0 || padLen > size {
+		return nil, errors.New("pkcs7: Invalid pad length")
+	}
 	// Check for integer overflow (platform independent)
-	if bufLen > 0 && padLen > 0 && bufLen > (math.MaxInt - padLen) {
+	if bufLen > math.MaxInt-padLen {
 		return nil, errors.New("pkcs7: Input too large, would cause integer overflow")
 	}
-
-	padded := make([]byte, bufLen+padLen)
+	totalLen := bufLen + padLen
+	if totalLen < 0 || totalLen > maxPadInputSize+size {
+		return nil, errors.New("pkcs7: Padded buffer too large or negative")
+	}
+	padded := make([]byte, totalLen)
 	copy(padded, buf)
 	for i := 0; i < padLen; i++ {
 		padded[bufLen+i] = byte(padLen)
