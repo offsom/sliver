@@ -52,6 +52,7 @@ import (
 
 	// {{if or .Config.IncludeMTLS .Config.IncludeWG}}
 	"strconv"
+	"math"
 	// {{end}}
 
 	// {{if .Config.IncludeDNS}}
@@ -187,7 +188,7 @@ func mtlsBeacon(uri *url.URL) *Beacon {
 	// {{end}}
 	var err error
 	lport, err := strconv.Atoi(uri.Port())
-	if err != nil {
+	if err != nil || lport < 0 || lport > int(math.MaxUint16) {
 		lport = 8888
 	}
 
