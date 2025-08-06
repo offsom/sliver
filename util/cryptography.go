@@ -56,8 +56,8 @@ func PreludeEncrypt(data []byte, key []byte, iv []byte) []byte {
 	}
 	block, _ := aes.NewCipher(key)
 
-	// Check for integer overflow
-	if len(plainText) > 0 && aes.BlockSize > (1<<31-1)-len(plainText) {
+	// Check for integer overflow in buffer allocation
+	if len(plainText) > 0 && (aes.BlockSize > math.MaxInt-len(plainText)) {
 		return make([]byte, 0)
 	}
 
