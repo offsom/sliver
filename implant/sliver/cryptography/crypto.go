@@ -138,7 +138,16 @@ func Encrypt(key [chacha20poly1305.KeySize]byte, plaintext []byte) ([]byte, erro
 	}
 	compressed := gzipBuf(plaintext)
 	plaintext = bytes.NewBuffer(compressed).Bytes()
-	nonce := make([]byte, aead.NonceSize(), aead.NonceSize()+len(plaintext)+aead.Overhead())
+	const maxPlaintextSize = 64 * 1024 * 1024 // 64MB
+	if len(plaintext) > maxPlaintextSize {
+		return nil, errors.New("plaintext too large")
+	}
+	// Check for integer overflow in size computation
+	totalSize := aead.NonceSize() + len(plaintext) + aead.Overhead()
+	if totalSize < 0 {
+		return nil, errors.New("size computation overflow")
+	}
+	nonce := make([]byte, aead.NonceSize(), totalSize)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
