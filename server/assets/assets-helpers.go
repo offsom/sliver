@@ -417,6 +417,10 @@ func untarSkipTopLevel(dst string, r io.Reader) error {
 // UnzipSkipTopLevel - Unzip a zip file, skipping the top level directory
 func unzipSkipTopLevel(dst string, z *zip.Reader) error {
 	topLevel := ""
+	absDst, err := filepath.Abs(dst)
+	if err != nil {
+		return err
+	}
 	for index, file := range z.File {
 		if index == 0 {
 			topLevel = file.Name
@@ -427,17 +431,29 @@ func unzipSkipTopLevel(dst string, z *zip.Reader) error {
 			return err
 		}
 		defer rc.Close()
-		fPath := filepath.Join(dst, strings.TrimPrefix(file.Name, topLevel))
+		relPath := strings.TrimPrefix(file.Name, topLevel)
+		// Prevent Zip Slip: check for ".." and absolute paths
+		if strings.Contains(relPath, "..") || filepath.IsAbs(relPath) {
+			return fmt.Errorf("zip entry contains invalid path: %s", file.Name)
+		}
+		fPath := filepath.Join(dst, relPath)
+		absFPath, err := filepath.Abs(fPath)
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(absFPath, absDst+string(os.PathSeparator)) && absFPath != absDst {
+			return fmt.Errorf("zip entry escapes destination directory: %s", file.Name)
+		}
 		if file.FileInfo().IsDir() {
-			err = os.MkdirAll(fPath, 0700)
+			err = os.MkdirAll(absFPath, 0700)
 			if err != nil {
 				return err
 			}
 		} else {
-			if err = os.MkdirAll(filepath.Dir(fPath), 0700); err != nil {
+			if err = os.MkdirAll(filepath.Dir(absFPath), 0700); err != nil {
 				return err
 			}
-			outFile, err := os.OpenFile(fPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+			outFile, err := os.OpenFile(absFPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
 			if err != nil {
 				return err
 			}
