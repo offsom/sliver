@@ -209,13 +209,13 @@ func (p *ChannelProxy) HostPort() (string, uint32) {
 		// {{end}}
 		return "", defaultPort
 	}
-	port := uint32(portNumber)
-	if port < 1 || 65535 < port {
+	if portNumber < 1 || portNumber > 65535 {
 		// {{if .Config.Debug}}
-		log.Printf("Invalid port number %d", port)
+		log.Printf("Invalid port number %d", portNumber)
 		// {{end}}
 		return "", defaultPort
 	}
+	port := uint32(portNumber)
 	return host, port
 }
 
