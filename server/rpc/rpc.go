@@ -25,7 +25,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
+	"math"
 	"github.com/bishopfox/sliver/client/version"
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"
@@ -90,6 +90,13 @@ func (rpc *Server) GetVersion(ctx context.Context, _ *commonpb.Empty) (*clientpb
 	// Ensure we have at least 3 version components
 	if len(semVer) < 3 {
 		return nil, fmt.Errorf("invalid semantic version: expected at least 3 components, got %d", len(semVer))
+	}
+
+	// Bounds check for int32
+	for i, v := range semVer[:3] {
+		if v < math.MinInt32 || v > math.MaxInt32 {
+			return nil, fmt.Errorf("semantic version component %d out of int32 bounds: %d", i, v)
+		}
 	}
 
 	return &clientpb.Version{
