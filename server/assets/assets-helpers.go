@@ -380,6 +380,22 @@ func untarSkipTopLevel(dst string, r io.Reader) error {
 		// the target location where the dir/file should be created
 		target := filepath.Join(dst, strings.TrimPrefix(header.Name, topLevel.Name))
 
+		// Validate that the target path is within the destination directory to prevent Zip Slip
+		absDst, err := filepath.Abs(dst)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path of destination: %v", err)
+		}
+		absTarget, err := filepath.Abs(target)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path of target: %v", err)
+		}
+		// Check for directory traversal or absolute path
+		rel, err := filepath.Rel(absDst, absTarget)
+		if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(header.Name) || strings.Contains(header.Name, "..") {
+			// Skip this entry or return an error
+			return fmt.Errorf("tar entry %q is trying to escape destination directory", header.Name)
+		}
+
 		// the following switch could also be done using fi.Mode(), not sure if there
 		// a benefit of using one vs. the other.
 		// fi := header.FileInfo()
