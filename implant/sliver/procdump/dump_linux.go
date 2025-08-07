@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"math"
 )
 
 /*
@@ -345,6 +346,11 @@ func dumpProcess(pid int32) (ProcessDump, error) {
 				a slice to cut from the buffer
 			*/
 			numberOfBytes := int(region.end - region.start)
+			// Bounds check: ensure region.start fits in int64
+			if region.start > uint64(math.MaxInt64) {
+				// Skip this region or handle error
+				continue
+			}
 			bytesRead, err := processMemory.ReadAt(res.data[currentDumpOffset:currentDumpOffset + numberOfBytes], int64(region.start))
 			if err != nil && err != io.EOF {
 				return res, fmt.Errorf("{{if .Config.Debug}}Error reading process memory{{end}}")
