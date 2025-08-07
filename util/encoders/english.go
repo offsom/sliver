@@ -19,7 +19,8 @@ package encoders
 */
 
 import (
-	insecureRand "math/rand"
+	"crypto/rand"
+	"math/big"
 	"strings"
 )
 
@@ -36,7 +37,12 @@ func (e English) Encode(data []byte) ([]byte, error) {
 	words := []string{}
 	for _, b := range data {
 		possibleWords := dictionary[int(b)]
-		index := insecureRand.Intn(len(possibleWords))
+		bigLen := big.NewInt(int64(len(possibleWords)))
+		idxBig, err := rand.Int(rand.Reader, bigLen)
+		if err != nil {
+			return nil, err
+		}
+		index := int(idxBig.Int64())
 		words = append(words, possibleWords[index])
 	}
 	return []byte(strings.Join(words, " ")), nil
