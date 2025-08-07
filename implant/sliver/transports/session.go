@@ -26,6 +26,7 @@ import (
 
 	// {{if or .Config.IncludeMTLS .Config.IncludeWG}}
 	"strconv"
+	"math"
 	// {{end}}
 
 	// {{if .Config.Debug}}
@@ -337,6 +338,13 @@ func wgConnect(uri *url.URL) (*Connection, error) {
 		if err != nil {
 			// {{if .Config.Debug}}
 			log.Printf("Error parsing wg listen port %s (default to 53)", err)
+			// {{end}}
+			lport = 53
+		}
+		// Check that lport is within valid port range
+		if lport < 0 || lport > int(math.MaxUint16) {
+			// {{if .Config.Debug}}
+			log.Printf("Port out of range (%d), defaulting to 53", lport)
 			// {{end}}
 			lport = 53
 		}
