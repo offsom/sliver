@@ -25,6 +25,7 @@ import (
 	"io"
 	"log"
 	insecureRand "math/rand"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -439,8 +440,16 @@ func (con *SliverClient) PrintLogo() {
 		fmt.Printf(Info+"Client %s\r\n", version.FullVersion())
 	}
 	fmt.Println(Info + "Welcome to the sliver shell, please type 'help' for options\r")
-	if serverVer.Major != int32(version.SemanticVersion()[0]) {
-		fmt.Printf(Warn + "Warning: Client and server may be running incompatible versions.\r\n")
+	semVer := version.SemanticVersion()
+	if len(semVer) > 0 {
+		major := semVer[0]
+		if major >= math.MinInt32 && major <= math.MaxInt32 {
+			if serverVer.Major != int32(major) {
+				fmt.Printf(Warn + "Warning: Client and server may be running incompatible versions.\r\n")
+			}
+		} else {
+			fmt.Printf(Warn + "Warning: Client version major number out of int32 bounds, skipping compatibility check.\r\n")
+		}
 	}
 	con.CheckLastUpdate()
 }
