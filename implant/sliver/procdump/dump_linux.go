@@ -116,6 +116,10 @@ func parseMap(mapLine string) *MemoryRegion {
 			// Something is wrong with this region, discard this record
 			return nil
 		}
+		if regionStart > uint64(math.MaxUintptr) {
+			// Address does not fit in uintptr, discard this region
+			return nil
+		}
 		memRegion.start = regionStart
 
 		regionEnd, err := strconv.ParseUint(regionInformation[2], 16, 64)
@@ -123,7 +127,10 @@ func parseMap(mapLine string) *MemoryRegion {
 			// Something is wrong with this region, discard this record
 			return nil
 		}
-		
+		if regionEnd > uint64(math.MaxUintptr) {
+			// Address does not fit in uintptr, discard this region
+			return nil
+		}
 		memRegion.end = regionEnd
 
 		if regionInformation[4] == "00:00" {
