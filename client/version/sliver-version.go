@@ -47,16 +47,19 @@ var (
 	CompiledAt string
 )
 
-// SemanticVersion - Get the structured sematic version
-func SemanticVersion() []int {
-	semVer := []int{}
+// SemanticVersion - Get the structured semantic version as []int32
+func SemanticVersion() []int32 {
+	semVer := []int32{}
 	version := Version
 	if strings.HasPrefix(version, "v") {
 		version = version[1:]
 	}
 	for _, part := range strings.Split(version, ".") {
-		number, _ := strconv.Atoi(part)
-		semVer = append(semVer, number)
+		number64, err := strconv.ParseInt(part, 10, 32)
+		if err != nil {
+			number64 = 0
+		}
+		semVer = append(semVer, int32(number64))
 	}
 	return semVer
 }

@@ -92,17 +92,10 @@ func (rpc *Server) GetVersion(ctx context.Context, _ *commonpb.Empty) (*clientpb
 		return nil, fmt.Errorf("invalid semantic version: expected at least 3 components, got %d", len(semVer))
 	}
 
-	// Bounds check for int32
-	for i, v := range semVer[:3] {
-		if v < math.MinInt32 || v > math.MaxInt32 {
-			return nil, fmt.Errorf("semantic version component %d out of int32 bounds: %d", i, v)
-		}
-	}
-
 	return &clientpb.Version{
-		Major:      int32(semVer[0]),
-		Minor:      int32(semVer[1]),
-		Patch:      int32(semVer[2]),
+		Major:      semVer[0],
+		Minor:      semVer[1],
+		Patch:      semVer[2],
 		Commit:     version.GitCommit,
 		Dirty:      dirty,
 		CompiledAt: compiled.Unix(),
