@@ -21,6 +21,7 @@ package wireguard
 import (
 	"context"
 	"strconv"
+	"math"
 
 	"github.com/bishopfox/sliver/client/console"
 	"github.com/bishopfox/sliver/protobuf/sliverpb"
@@ -41,6 +42,10 @@ func WGSocksStopCmd(cmd *cobra.Command, con *console.SliverClient, args []string
 	socksID, err := strconv.Atoi(args[0])
 	if err != nil {
 		con.PrintErrorf("Error converting Socks ID (%s) to int: %s", args[0], err.Error())
+		return
+	}
+	if socksID < math.MinInt32 || socksID > math.MaxInt32 {
+		con.PrintErrorf("Socks ID (%d) is out of int32 range", socksID)
 		return
 	}
 
