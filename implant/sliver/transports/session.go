@@ -334,19 +334,16 @@ func wgConnect(uri *url.URL) (*Connection, error) {
 		// {{if .Config.Debug}}
 		log.Printf("Connecting -> %s", uri.Host)
 		// {{end}}
-		lport, err := strconv.Atoi(uri.Port())
+		portStr := uri.Port()
+		lportUint, err := strconv.ParseUint(portStr, 10, 16)
+		var lport uint16
 		if err != nil {
 			// {{if .Config.Debug}}
 			log.Printf("Error parsing wg listen port %s (default to 53)", err)
 			// {{end}}
 			lport = 53
-		}
-		// Check that lport is within valid port range
-		if lport < 0 || lport > int(math.MaxUint16) {
-			// {{if .Config.Debug}}
-			log.Printf("Port out of range (%d), defaulting to 53", lport)
-			// {{end}}
-			lport = 53
+		} else {
+			lport = uint16(lportUint)
 		}
 		// Attempt to resolve the hostname in case
 		// we received a domain name and not an IP address.
@@ -359,7 +356,7 @@ func wgConnect(uri *url.URL) (*Connection, error) {
 			return errors.New("{{if .Config.Debug}}Invalid address{{end}}")
 		}
 		hostname := addrs[0]
-		conn, dev, err = wireguard.WGConnect(hostname, uint16(lport))
+		conn, dev, err = wireguard.WGConnect(hostname, lport)
 		if err != nil {
 			return err
 		}
