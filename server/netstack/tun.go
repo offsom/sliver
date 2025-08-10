@@ -976,7 +976,7 @@ func (tnet *Net) DialContext(ctx context.Context, network, address string) (net.
 		acceptV6 = !acceptV4
 	}
 	var host string
-	var port int
+	var port uint16
 	if matches[1] == "ping" {
 		host = address
 	} else {
@@ -986,10 +986,12 @@ func (tnet *Net) DialContext(ctx context.Context, network, address string) (net.
 		if err != nil {
 			return nil, &net.OpError{Op: "dial", Err: err}
 		}
-		port, err = strconv.Atoi(sport)
-		if err != nil || port < 0 || port > 65535 {
+		var port64 uint64
+		port64, err = strconv.ParseUint(sport, 10, 16)
+		if err != nil {
 			return nil, &net.OpError{Op: "dial", Err: errNumericPort}
 		}
+		port = uint16(port64)
 	}
 	allAddr, err := tnet.LookupContextHost(ctx, host)
 	if err != nil {
@@ -999,7 +1001,7 @@ func (tnet *Net) DialContext(ctx context.Context, network, address string) (net.
 	for _, addr := range allAddr {
 		ip, err := netip.ParseAddr(addr)
 		if err == nil && ((ip.Is4() && acceptV4) || (ip.Is6() && acceptV6)) {
-			addrs = append(addrs, netip.AddrPortFrom(ip, uint16(port)))
+			addrs = append(addrs, netip.AddrPortFrom(ip, port))
 		}
 	}
 	if len(addrs) == 0 && len(allAddr) != 0 {
