@@ -240,6 +240,13 @@ func mtlsConnect(uri *url.URL) (*Connection, error) {
 			// {{end}}
 			lport = 8888
 		}
+		// Ensure lport is within the valid range for uint16 (0–65535)
+		if lport < 0 || lport > math.MaxUint16 {
+			// {{if .Config.Debug}}
+			log.Printf("mtls listen port %d out of range (default to 8888)", lport)
+			// {{end}}
+			lport = 8888
+		}
 		conn, err = mtls.MtlsConnect(uri.Hostname(), uint16(lport))
 		if err != nil {
 			return err
