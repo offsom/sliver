@@ -187,9 +187,12 @@ func mtlsBeacon(uri *url.URL) *Beacon {
 	log.Printf("Beacon -> %s", uri.String())
 	// {{end}}
 	var err error
-	lport, err := strconv.Atoi(uri.Port())
-	if err != nil || lport < 0 || lport > int(math.MaxUint16) {
+	lport64, err := strconv.ParseUint(uri.Port(), 10, 16)
+	var lport uint16
+	if err != nil {
 		lport = 8888
+	} else {
+		lport = uint16(lport64)
 	}
 
 	var conn *tls.Conn
