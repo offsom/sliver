@@ -262,6 +262,7 @@ func wgBeacon(uri *url.URL) *Beacon {
 				return errors.New("{{if .Config.Debug}}Invalid address{{end}}")
 			}
 			hostname := addrs[0]
+			// Safe conversion: lport is already validated to be in uint16 range
 			conn, dev, err = wireguard.WGConnect(hostname, uint16(lport))
 			if err != nil {
 				return err

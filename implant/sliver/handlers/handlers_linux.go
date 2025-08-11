@@ -30,7 +30,6 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
-	"math"
 
 	"github.com/bishopfox/sliver/implant/sliver/mount"
 	"github.com/bishopfox/sliver/implant/sliver/procdump"
@@ -467,6 +466,7 @@ func chownHandler(data []byte, resp RPCResponse) {
 
 		err := filepath.WalkDir(target, func(file string, d fs.DirEntry, err error) error {
 			if err == nil {
+				// Safe conversion: uid and gid are already validated to fit in int
 				err = os.Chown(file, int(uid), int(gid))
 				if err != nil {
 					return err
@@ -482,6 +482,7 @@ func chownHandler(data []byte, resp RPCResponse) {
 
 	} else {
 
+		// Safe conversion: uid and gid are already validated to fit in int
 		err = os.Chown(target, int(uid), int(gid))
 		if err != nil {
 			chown.Response.Err = err.Error()

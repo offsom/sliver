@@ -98,13 +98,13 @@ func CheckForUpdates(client *http.Client, prereleases bool) (*Release, error) {
 		releaseSemVer := parseGitTag(release.TagName)
 		for index, myVer := range mySemVer {
 			if index < len(releaseSemVer) {
-				if releaseSemVer[index] == myVer {
+				if releaseSemVer[index] == int(myVer) {
 					continue
 				}
-				if releaseSemVer[index] < myVer {
+				if releaseSemVer[index] < int(myVer) {
 					break
 				}
-				if myVer < releaseSemVer[index] {
+				if int(myVer) < releaseSemVer[index] {
 					return release, nil
 				}
 			}

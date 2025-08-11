@@ -223,6 +223,10 @@ func startMultiplayerModeCmd(cmd *cobra.Command, _ []string) {
 }
 
 func JobStartClientListener(multiplayerListener *clientpb.MultiplayerListenerReq) (int, error) {
+	// Safe conversion: ensure port fits in uint16 range
+	if multiplayerListener.Port > 65535 {
+		return -1, fmt.Errorf("port %d exceeds maximum allowed (65535)", multiplayerListener.Port)
+	}
 	_, ln, err := transport.StartMtlsClientListener(multiplayerListener.Host, uint16(multiplayerListener.Port))
 	if err != nil {
 		return -1, err // If we fail to bind don't setup the Job
@@ -233,7 +237,7 @@ func JobStartClientListener(multiplayerListener *clientpb.MultiplayerListenerReq
 		Name:        "grpc/mtls",
 		Description: "client listener",
 		Protocol:    "tcp",
-		Port:        uint16(multiplayerListener.Port),
+		Port:        uint16(multiplayerListener.Port), // Safe: already validated above
 		JobCtrl:     make(chan bool),
 	}
 

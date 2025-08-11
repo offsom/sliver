@@ -25,7 +25,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"math"
+
+	// "math" // 已移除未使用的math包
 	"github.com/bishopfox/sliver/client/version"
 	"github.com/bishopfox/sliver/protobuf/clientpb"
 	"github.com/bishopfox/sliver/protobuf/commonpb"

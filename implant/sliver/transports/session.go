@@ -247,6 +247,7 @@ func mtlsConnect(uri *url.URL) (*Connection, error) {
 			// {{end}}
 			lport = 8888
 		}
+		// Safe conversion: lport is already validated to be in uint16 range
 		conn, err = mtls.MtlsConnect(uri.Hostname(), uint16(lport))
 		if err != nil {
 			return err
