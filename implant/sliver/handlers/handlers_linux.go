@@ -438,9 +438,9 @@ func chownHandler(data []byte, resp RPCResponse) {
 		chown.Response.Err = err.Error()
 		goto finished
 	}
-	// Bounds check: ensure uid fits in int32
-	if uid > uint64(math.MaxInt) {
-		chown.Response.Err = fmt.Sprintf("UID value %d exceeds maximum allowed (%d)", uid, math.MaxInt)
+	// Bounds check: ensure uid fits in int
+	if uid > uint64(int(^uint(0)>>1)) {
+		chown.Response.Err = fmt.Sprintf("UID value %d exceeds maximum allowed (%d)", uid, int(^uint(0)>>1))
 		goto finished
 	}
 
@@ -456,9 +456,9 @@ func chownHandler(data []byte, resp RPCResponse) {
 		chown.Response.Err = err.Error()
 		goto finished
 	}
-	// Bounds check: ensure gid fits in int32
-	if gid > uint64(math.MaxInt) {
-		chown.Response.Err = fmt.Sprintf("GID value %d exceeds maximum allowed (%d)", gid, math.MaxInt)
+	// Bounds check: ensure gid fits in int
+	if gid > uint64(int(^uint(0)>>1)) {
+		chown.Response.Err = fmt.Sprintf("GID value %d exceeds maximum allowed (%d)", gid, int(^uint(0)>>1))
 		goto finished
 	}
 
