@@ -318,6 +318,11 @@ func dumpProcess(pid int32) (ProcessDump, error) {
 		// Read the memory, region by region
 		for _, region := range(processRegions) {
 			numberOfBytes := int(region.end - region.start)
+			// Check that region.start fits in uintptr before conversion
+			if region.start > uint64(math.MaxUintptr) {
+				// Skip this region, as it cannot be represented as a pointer
+				continue
+			}
 			bytesRead, err := syscall.PtracePeekData(int(pid), uintptr(region.start), res.data[currentDumpOffset:currentDumpOffset + numberOfBytes])
 			if err != nil {
 				return res, fmt.Errorf("{{if .Config.Debug}}Error reading process memory{{end}}")
