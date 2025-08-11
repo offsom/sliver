@@ -457,16 +457,21 @@ func chownHandler(data []byte, resp RPCResponse) {
 		goto finished
 	}
 	// Bounds check: ensure gid fits in int
-	if gid > uint64(int(^uint(0)>>1)) {
-		chown.Response.Err = fmt.Sprintf("GID value %d exceeds maximum allowed (%d)", gid, int(^uint(0)>>1))
-		goto finished
-	}
+	// (Moved inside callback and non-recursive case below)
+
 
 	// Check if the recursive flag is set and the path is a directory
 	if chownReq.Recursive {
 
 		err := filepath.WalkDir(target, func(file string, d fs.DirEntry, err error) error {
 			if err == nil {
+				// Bounds check: ensure gid fits in int before conversion
+				if gid > uint64(int(^uint(0)>>1)) {
+					return fmt.Errorf("GID value %d exceeds maximum allowed (%d)", gid, int(^uint(0)>>1))
+				}
+				if uid > uint64(int(^uint(0)>>1)) {
+					return fmt.Errorf("UID value %d exceeds maximum allowed (%d)", uid, int(^uint(0)>>1))
+				}
 				err = os.Chown(file, int(uid), int(gid))
 				if err != nil {
 					return err
@@ -482,6 +487,15 @@ func chownHandler(data []byte, resp RPCResponse) {
 
 	} else {
 
+		// Bounds check: ensure gid fits in int before conversion
+		if gid > uint64(int(^uint(0)>>1)) {
+			chown.Response.Err = fmt.Sprintf("GID value %d exceeds maximum allowed (%d)", gid, int(^uint(0)>>1))
+			goto finished
+		}
+		if uid > uint64(int(^uint(0)>>1)) {
+			chown.Response.Err = fmt.Sprintf("UID value %d exceeds maximum allowed (%d)", uid, int(^uint(0)>>1))
+			goto finished
+		}
 		err = os.Chown(target, int(uid), int(gid))
 		if err != nil {
 			chown.Response.Err = err.Error()
