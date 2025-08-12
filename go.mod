@@ -54,7 +54,7 @@ require (
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	google.golang.org/grpc v1.74.2
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.7
 	gopkg.in/AlecAivazis/survey.v1 v1.8.8
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
