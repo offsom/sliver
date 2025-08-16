@@ -1,6 +1,7 @@
 module github.com/bishopfox/sliver
 
-go 1.22.0
+go 1.23.0
+
 toolchain go1.24.1
 
 replace github.com/rsteube/carapace v0.36.3 => github.com/reeflective/carapace v0.46.3-0.20231214181515-27e49f3c3b69
@@ -38,8 +39,8 @@ require (
 	github.com/reeflective/readline v1.0.14
 	github.com/rsteube/carapace v0.46.3-0.20231214181515-27e49f3c3b69
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.9.0
 	github.com/tetratelabs/wazero v1.8.2
 	github.com/things-go/go-socks5 v0.0.5
