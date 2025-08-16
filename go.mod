@@ -1,6 +1,7 @@
 module github.com/bishopfox/sliver
 
-go 1.22.0
+go 1.23.0
+
 toolchain go1.24.1
 
 replace github.com/rsteube/carapace v0.36.3 => github.com/reeflective/carapace v0.46.3-0.20231214181515-27e49f3c3b69
@@ -29,7 +30,7 @@ require (
 	github.com/klauspost/compress v1.17.9
 	github.com/lesnuages/go-winio v0.4.19
 	github.com/lesnuages/snitch v0.6.0
-	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/miekg/dns v1.1.59
 	github.com/moloch--/asciicast v0.1.0
 	github.com/moloch--/memmod v0.0.0-20230225130813-fd77d905589e
