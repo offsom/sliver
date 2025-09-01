@@ -684,7 +684,7 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.7
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/stretchr/testify v1.10.0
+# github.com/stretchr/testify v1.11.0
 ## explicit; go 1.17
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/assert/yaml
@@ -773,7 +773,7 @@ github.com/tetratelabs/wazero/sys
 # github.com/thedevsaddam/gojsonq/v2 v2.5.2
 ## explicit; go 1.13
 github.com/thedevsaddam/gojsonq/v2
-# github.com/things-go/go-socks5 v0.0.6
+# github.com/things-go/go-socks5 v0.1.0
 ## explicit; go 1.18
 github.com/things-go/go-socks5
 github.com/things-go/go-socks5/bufferpool
